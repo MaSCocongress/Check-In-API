@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Konum Tabanlı Katılım</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2em;
+      text-align: center;
+    }
+    #checkin {
+      display: none;
+      margin-top: 1em;
+    }
+    input, button {
+      padding: 0.5em;
+      margin: 0.5em;
+    }
+  </style>
+</head>
+<body>
+  <h2>Toplantı Katılım Formu</h2>
+  <p id="status">Konum alınıyor...</p>
+
+  <div id="checkin">
+    <input type="text" id="name" placeholder="Adınızı girin">
+    <button onclick="submitForm()">Gönder</button>
+  </div>
+
+  <script>
+    const targetLat = 40.952181;
+    const targetLng = 29.139799;
+    const radius = 100; // meters
+    const scriptURL = "https://script.google.com/macros/s/AKfycbw_uDCV4u7nm12dPSDcPx2f2mPvvLzEhXYFE-aGsKuGQILXwPaR4jC0BUkzBnfdWiLKUg/exec";
+
+    let currentLat = null;
+    let currentLng = null;
+    let currentDistance = null;
+
+    function getDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function success(position) {
+      currentLat = position.coords.latitude;
+      currentLng = position.coords.longitude;
+      currentDistance = getDistance(currentLat, currentLng, targetLat, targetLng);
+
+      if (currentDistance <= radius) {
+        document.getElementById("status").innerText = `Konum doğrulandı (${Math.round(currentDistance)}m içinde). Katılım yapabilirsiniz.`;
+        document.getElementById("checkin").style.display = "block";
+      } else {
+        document.getElementById("status").innerText = `Bu sayfa yalnızca etkinlik konumunda çalışır. Şu an ${Math.round(currentDistance)}m uzaktasınız.`;
+      }
+    }
+
+    function error(err) {
+      document.getElementById("status").innerText = "Konum alınamadı: " + err.message;
+    }
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(success, error, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      });
+    } else {
+      document.getElementById("status").innerText = "Tarayıcınız konum servisini desteklemiyor.";
+    }
+
+    function submitForm() {
+      const name = document.getElementById("name").value.trim();
+      if (!name) {
+        alert("Lütfen adınızı girin.");
+        return;
+      }
+
+      const data = {
+        name: name,
+        latitude: currentLat,
+        longitude: currentLng,
+        distance: currentDistance,
+        status: currentDistance <= radius ? "inside" : "outside"
+      };
+
+      fetch(scriptURL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      })
+      .then(response => {
+        if (response.ok) {
+          document.getElementById("status").innerText = "Katılım kaydedildi. Teşekkürler!";
+          document.getElementById("checkin").style.display = "none";
+        } else {
+          document.getElementById("status").innerText = "Gönderim başarısız oldu.";
+        }
+      })
+      .catch(error => {
+        document.getElementById("status").innerText = "Sunucu hatası: " + error.message;
+      });
+    }
+  </script>
+</body>
+</html>
