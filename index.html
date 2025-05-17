@@ -1,115 +1,96 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Konum Tabanlı Katılım</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Location Check-In</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 2em;
-      text-align: center;
-    }
-    #checkin {
-      display: none;
-      margin-top: 1em;
-    }
-    input, button {
-      padding: 0.5em;
-      margin: 0.5em;
-    }
+    body { font-family: Arial, sans-serif; text-align: center; margin-top: 40px; }
+    input, button { padding: 10px; font-size: 16px; margin-top: 10px; }
+    #status { margin-top: 20px; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h2>Toplantı Katılım Formu</h2>
-  <p id="status">Konum alınıyor...</p>
+  <h2>Meeting Check-In</h2>
 
-  <div id="checkin">
-    <input type="text" id="name" placeholder="Adınızı girin">
-    <button onclick="submitForm()">Gönder</button>
-  </div>
+  <form id="checkin-form">
+    <label>Enter your name:</label><br>
+    <input type="text" id="name" required><br>
+    <button type="submit">Check In</button>
+  </form>
+
+  <p id="status">Checking location...</p>
 
   <script>
-    const targetLat = 40.952181;
-    const targetLng = 29.139799;
-    const radius = 100; // meters
-    const scriptURL = "https://script.google.com/macros/s/AKfycbw_uDCV4u7nm12dPSDcPx2f2mPvvLzEhXYFE-aGsKuGQILXwPaR4jC0BUkzBnfdWiLKUg/exec";
+    const allowedLat = 41.12345; // Replace with your latitude
+    const allowedLon = 29.98765; // Replace with your longitude
+    const maxDistanceMeters = 100;
+    const endpoint = "https://script.google.com/macros/s/PASTE_YOUR_SCRIPT_ID_HERE/exec"; // Replace with your Apps Script URL
 
-    let currentLat = null;
-    let currentLng = null;
-    let currentDistance = null;
+    // Prevent duplicate check-in
+    if (localStorage.getItem("checkedIn")) {
+      document.getElementById("checkin-form").style.display = "none";
+      document.getElementById("status").innerText = "You have already checked in.";
+    }
 
     function getDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371000;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) ** 2 +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLon / 2) ** 2;
+      const R = 6371e3;
+      const toRad = x => x * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     }
 
-    function success(position) {
-      currentLat = position.coords.latitude;
-      currentLng = position.coords.longitude;
-      currentDistance = getDistance(currentLat, currentLng, targetLat, targetLng);
+    let userLat = null, userLon = null;
 
-      if (currentDistance <= radius) {
-        document.getElementById("status").innerText = `Konum doğrulandı (${Math.round(currentDistance)}m içinde). Katılım yapabilirsiniz.`;
-        document.getElementById("checkin").style.display = "block";
+    navigator.geolocation.getCurrentPosition(success, error);
+
+    function success(position) {
+      userLat = position.coords.latitude;
+      userLon = position.coords.longitude;
+
+      const dist = getDistance(userLat, userLon, allowedLat, allowedLon);
+      if (dist <= maxDistanceMeters) {
+        document.getElementById("status").innerText = "You're in the right location. Please check in.";
       } else {
-        document.getElementById("status").innerText = `Bu sayfa yalnızca etkinlik konumunda çalışır. Şu an ${Math.round(currentDistance)}m uzaktasınız.`;
+        document.getElementById("checkin-form").style.display = "none";
+        document.getElementById("status").innerText = `You're too far away (${Math.round(dist)} meters). Check-in not allowed.`;
       }
     }
 
-    function error(err) {
-      document.getElementById("status").innerText = "Konum alınamadı: " + err.message;
+    function error() {
+      document.getElementById("status").innerText = "Location access denied. Cannot check in.";
+      document.getElementById("checkin-form").style.display = "none";
     }
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(success, error, {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      });
-    } else {
-      document.getElementById("status").innerText = "Tarayıcınız konum servisini desteklemiyor.";
-    }
+    document.getElementById("checkin-form").addEventListener("submit", function (e) {
+      e.preventDefault();
 
-    function submitForm() {
-      const name = document.getElementById("name").value.trim();
-      if (!name) {
-        alert("Lütfen adınızı girin.");
+      const name = document.getElementById("name").value;
+      if (!userLat || !userLon) {
+        document.getElementById("status").innerText = "Location not loaded yet.";
         return;
       }
 
-      const data = {
-        name: name,
-        latitude: currentLat,
-        longitude: currentLng,
-        distance: currentDistance,
-        status: currentDistance <= radius ? "inside" : "outside"
-      };
-
-      fetch(scriptURL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      })
-      .then(response => {
-        if (response.ok) {
-          document.getElementById("status").innerText = "Katılım kaydedildi. Teşekkürler!";
-          document.getElementById("checkin").style.display = "none";
-        } else {
-          document.getElementById("status").innerText = "Gönderim başarısız oldu.";
-        }
-      })
-      .catch(error => {
-        document.getElementById("status").innerText = "Sunucu hatası: " + error.message;
+      fetch(endpoint, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name,
+          latitude: userLat,
+          longitude: userLon,
+          timestamp: new Date().toISOString()
+        })
       });
-    }
+
+      localStorage.setItem("checkedIn", "true");
+      document.getElementById("checkin-form").style.display = "none";
+      document.getElementById("status").innerText = "Check-in successful. Thank you!";
+    });
   </script>
 </body>
 </html>
