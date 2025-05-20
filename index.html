@@ -21,10 +21,10 @@
   <p id="status">Checking location...</p>
 
   <script>
-    const allowedLat = 41.12345; // Replace with your latitude
-    const allowedLon = 29.98765; // Replace with your longitude
+    const allowedLat = 41.12345;
+    const allowedLon = 29.98765;
     const maxDistanceMeters = 100;
-    const endpoint = "https://script.google.com/macros/s/PASTE_YOUR_SCRIPT_ID_HERE/exec"; // Replace with your Apps Script URL
+    const endpoint = "https://script.google.com/macros/s/PASTE_YOUR_SCRIPT_ID_HERE/exec";
 
     // Prevent duplicate check-in
     if (localStorage.getItem("checkedIn")) {
